@@ -7,7 +7,7 @@ use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 pub const APP: &str = "tinydict";
-pub const DEFAULT_BINDING: &str = "<Control><Super>space";
+pub const DEFAULT_BINDING: &str = "<Control><Super>x";
 pub const HISTORY_KEEP: usize = 500;
 pub const ARMING_TIMEOUT_SECS: u64 = 20;
 pub const FINALIZE_TIMEOUT_SECS: u64 = 15;
@@ -356,10 +356,10 @@ words = [ "Speechmatics", { content = "ksni", sounds_like = ["kay snee"] } ]
 [cleanup]
 enabled = false
 api_key = ""
-api_base = "https://api.openai.com/v1"
-model = "gpt-4o-mini"
 timeout_secs = 30
-# OpenRouter-only:
+# Recommended (OpenRouter):
+# api_base = "https://openrouter.ai/api/v1"
+# model = "google/gemma-4-31b-it:nitro"
 # provider_only = ["cerebras"]
 # quantizations = ["fp16"]
 # allow_fallbacks = false
@@ -405,7 +405,9 @@ mod tests {
         assert_eq!(cfg.speechmatics.model, "enhanced");
         assert_eq!(cfg.speechmatics.api_key, "");
         assert_eq!(cfg.cleanup.api_key, "");
+        assert!(!cfg.cleanup.enabled);
         assert_eq!(cfg.cleanup.model, "gpt-4o-mini");
+        assert_eq!(cfg.cleanup.api_base, "https://api.openai.com/v1");
         assert!(cfg.cleanup.provider_only.is_empty());
         assert!(cfg.cleanup.quantizations.is_empty());
         assert_eq!(cfg.cleanup.thinking, None);

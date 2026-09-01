@@ -49,7 +49,7 @@ fn print_usage() {
         "\
 tinydict — hotkey transcription
 
-  tinydict setup [--binding KEY]   install units, dirs, and GNOME hotkey
+  tinydict setup [--binding KEY]   install units, dirs, and hotkey
   tinydict toggle                  start/stop a recording
   tinydict cancel                  abort the current recording
   tinydict status                  print daemon state

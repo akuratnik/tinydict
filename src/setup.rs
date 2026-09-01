@@ -46,11 +46,7 @@ pub fn run(binding: Option<&str>) -> Result<()> {
 
     write_units()?;
     enable_socket()?;
-    if have("gsettings") {
-        bind_hotkey(binding.unwrap_or(config::DEFAULT_BINDING))?;
-    } else {
-        println!("warning: gsettings not found — skipping GNOME hotkey");
-    }
+    bind_session_hotkey(binding)?;
     println!("setup complete. fill in api_key fields in {}", cfg.display());
     Ok(())
 }
@@ -121,8 +117,82 @@ fn enable_socket() -> Result<()> {
     Ok(())
 }
 
-fn bind_hotkey(binding: &str) -> Result<()> {
-    let command = format!("{} toggle", config::bin_path().display());
+fn bind_session_hotkey(binding: Option<&str>) -> Result<()> {
+    let cmd = format!("{} toggle", config::bin_path().display());
+    if hyprland() {
+        bind_hyprland(&cmd)?;
+        return Ok(());
+    }
+    if have("gsettings") {
+        bind_gnome(binding.unwrap_or(config::DEFAULT_BINDING), &cmd)?;
+        return Ok(());
+    }
+    println!("bind a hotkey to: {cmd}");
+    println!("default chord is Ctrl+Super+X");
+    Ok(())
+}
+
+fn hyprland() -> bool {
+    std::env::var("HYPRLAND_INSTANCE_SIGNATURE").is_ok()
+        || desktop().to_lowercase().contains("hyprland")
+}
+
+fn desktop() -> String {
+    std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default()
+}
+
+fn hypr_dir() -> std::path::PathBuf {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| config::home().join(".config"))
+        .join("hypr")
+}
+
+fn bind_hyprland(cmd: &str) -> Result<()> {
+    let lua = hypr_dir().join("bindings.lua");
+    let conf = hypr_dir().join("hyprland.conf");
+    if lua.exists() {
+        let block = format!(
+            "\n-- tinydict (takes Voxtype's Super+Ctrl+X if that was bound)\nhl.unbind(\"SUPER + CTRL + X\")\no.bind(\"SUPER + CTRL + X\", \"tinydict\", \"{cmd}\")\n"
+        );
+        append_once(&lua, "-- tinydict", &block)?;
+        println!("hotkey Super+Ctrl+X → {cmd}");
+        println!("wrote {}", lua.display());
+        println!("Omarchy: this is Voxtype's dictation chord. Reload Hyprland. F9 PTT stays with Voxtype if installed.");
+        return Ok(());
+    }
+    if conf.exists() {
+        let block = format!("\n# tinydict\nbind = SUPER CTRL, X, exec, {cmd}\n");
+        append_once(&conf, "# tinydict", &block)?;
+        println!("hotkey Super+Ctrl+X → {cmd}");
+        println!("wrote {}", conf.display());
+        println!("reload Hyprland to apply");
+        return Ok(());
+    }
+    println!("bind a hotkey to: {cmd}");
+    println!("Hyprland:  bind = SUPER CTRL, X, exec, {cmd}");
+    println!("Omarchy (~/.config/hypr/bindings.lua):");
+    println!("  hl.unbind(\"SUPER + CTRL + X\")");
+    println!("  o.bind(\"SUPER + CTRL + X\", \"tinydict\", \"{cmd}\")");
+    Ok(())
+}
+
+fn append_once(path: &std::path::Path, marker: &str, block: &str) -> Result<()> {
+    let existing = fs::read_to_string(path).unwrap_or_default();
+    if existing.contains(marker) {
+        println!("hotkey already in {}", path.display());
+        return Ok(());
+    }
+    let mut f = fs::OpenOptions::new()
+        .append(true)
+        .open(path)
+        .with_context(|| format!("appending {}", path.display()))?;
+    use std::io::Write;
+    f.write_all(block.as_bytes())?;
+    Ok(())
+}
+
+fn bind_gnome(binding: &str, command: &str) -> Result<()> {
     gset_item("name", "tinydict")?;
     gset_item("command", &command)?;
     gset_item("binding", binding)?;
