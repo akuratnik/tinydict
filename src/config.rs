@@ -5,6 +5,7 @@ use std::fs;
 use std::io::{Read, Write};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 pub const APP: &str = "tinydict";
 pub const DEFAULT_BINDING: &str = "<Control><Super>x";
@@ -267,6 +268,21 @@ pub fn config_dir() -> PathBuf {
 
 pub fn config_path() -> PathBuf {
     config_dir().join("config.toml")
+}
+
+pub fn open_settings() -> Result<()> {
+    let path = config_path();
+    if !path.exists() {
+        write_0600(&path, CONFIG_TEMPLATE)?;
+    }
+    let status = Command::new("xdg-open")
+        .arg(&path)
+        .status()
+        .context("running xdg-open (install xdg-utils)")?;
+    if !status.success() {
+        bail!("xdg-open failed for {}", path.display());
+    }
+    Ok(())
 }
 
 pub fn data_dir() -> PathBuf {

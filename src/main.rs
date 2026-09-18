@@ -16,6 +16,7 @@ fn main() {
         Some("toggle") => cli::send("toggle"),
         Some("cancel") => cli::send("cancel"),
         Some("status") => cli::send("status"),
+        Some("settings") => config::open_settings(),
         Some("setup") => {
             let mut binding = None;
             while let Some(arg) = args.next() {
@@ -50,6 +51,7 @@ fn print_usage() {
 tinydict — hotkey transcription
 
   tinydict setup [--binding KEY]   install units, dirs, and hotkey
+  tinydict settings                open config.toml in the default editor
   tinydict toggle                  start/stop a recording
   tinydict cancel                  abort the current recording
   tinydict status                  print daemon state

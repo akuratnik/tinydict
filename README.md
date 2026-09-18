@@ -18,8 +18,8 @@ tinydict setup
 
 Needs PipeWire (`pw-record`), `wl-clipboard`, and a systemd user session.
 
-All settings & keys in `~/.config/tinydict/config.toml`. Reloaded for each recording.
+All settings & keys in `~/.config/tinydict/config.toml`. Reloaded for each recording. `tinydict settings` opens that file in the default editor.
 
 **Hotkey is Ctrl+Super+X**. `tinydict setup` binds it on GNOME and Hyprland. Otherwise bind `tinydict toggle` yourself.
 
-`tinydict toggle` · `tinydict cancel` · `tinydict status`
+`tinydict toggle` · `tinydict cancel` · `tinydict status` · `tinydict settings`
