@@ -17,10 +17,10 @@ cargo build --release
 
 Linux needs PipeWire (`pw-record`), `wl-clipboard`, and a systemd user session.
 
-macOS needs `brew install sox`. Setup installs a socket-activated LaunchAgent. The first recording asks for microphone access; a rebuilt binary may need it re-granted in System Settings → Privacy & Security → Microphone. Notifications come from Script Editor, so allow it in System Settings → Notifications. Logs: `~/.local/share/tinydict/tinydict.log`.
+macOS needs `brew install sox`. Setup installs two LaunchAgents: the socket-activated daemon and a tiny hotkey listener. The first recording asks for microphone access; a rebuilt binary may need it re-granted in System Settings → Privacy & Security → Microphone. Notifications come from Script Editor, so allow it in System Settings → Notifications. Logs: `~/.local/share/tinydict/tinydict.log`.
 
 All settings & keys in `~/.config/tinydict/config.toml`. Reloaded for each recording. `tinydict settings` opens that file in the default editor.
 
-**Hotkey is Ctrl+Super+X**. `tinydict setup` binds it on GNOME and Hyprland. Otherwise bind `tinydict toggle` yourself.
+**Hotkey is Ctrl+Super+X** (Ctrl+Cmd+X on macOS). `tinydict setup` binds it on macOS, GNOME and Hyprland. Otherwise bind `tinydict toggle` yourself.
 
 `tinydict toggle` · `tinydict cancel` · `tinydict status` · `tinydict settings`

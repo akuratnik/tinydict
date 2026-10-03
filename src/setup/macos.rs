@@ -17,8 +17,8 @@ pub fn install(binding: Option<&str>) -> Result<()> {
     if binding.is_some() {
         println!("note: --binding is ignored on macOS");
     }
-    // Forward what the agent can't see but paths depend on, so setup and the
-    // daemon agree on config and socket locations.
+    // Forward what the agents can't see but paths depend on, so setup, the
+    // daemon and the hotkey agent agree on config and socket locations.
     let mut env = vec![("PATH", format!("{}:{BASE_PATH}", rec_dir()?.display()))];
     for key in ["XDG_CONFIG_HOME", "XDG_DATA_HOME"] {
         if let Ok(v) = std::env::var(key) {
@@ -48,7 +48,12 @@ pub fn install(binding: Option<&str>) -> Result<()> {
         daemon::LAUNCHD_SOCKET
     );
     agent("daemon", &env, &daemon)?;
-    println!("bind a hotkey to: {} toggle", config::bin_path().display());
+    agent(
+        "hotkey",
+        &env,
+        "  <key>RunAtLoad</key><true/>\n  <key>KeepAlive</key><true/>\n",
+    )?;
+    println!("hotkey Ctrl+Cmd+X → tinydict toggle");
     println!("macOS asks for microphone access on the first recording");
     println!("notifications come from Script Editor; allow it in System Settings → Notifications");
     Ok(())

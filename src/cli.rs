@@ -5,6 +5,16 @@ use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
 pub fn send(cmd: &str) -> Result<()> {
+    let line = request(cmd)?;
+    print!("{line}");
+    if line.starts_with("error") {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+/// Sends one command to the daemon and returns its reply line.
+pub fn request(cmd: &str) -> Result<String> {
     let path = config::socket_path();
     let stream = UnixStream::connect(&path).with_context(|| {
         format!(
@@ -22,9 +32,5 @@ pub fn send(cmd: &str) -> Result<()> {
     if line.is_empty() {
         bail!("empty reply from daemon");
     }
-    print!("{line}");
-    if line.starts_with("error") {
-        std::process::exit(1);
-    }
-    Ok(())
+    Ok(line)
 }

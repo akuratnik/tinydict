@@ -3,6 +3,8 @@ mod cleanup;
 mod cli;
 mod config;
 mod daemon;
+#[cfg(target_os = "macos")]
+mod hotkey;
 mod output;
 mod setup;
 mod speechmatics;
@@ -13,6 +15,8 @@ fn main() {
     let cmd = args.next();
     let result = match cmd.as_deref() {
         Some("daemon") => daemon::run(),
+        #[cfg(target_os = "macos")]
+        Some("hotkey") => hotkey::run(),
         Some("toggle") => cli::send("toggle"),
         Some("cancel") => cli::send("cancel"),
         Some("status") => cli::send("status"),
@@ -58,4 +62,6 @@ tinydict — hotkey transcription
   tinydict daemon                  run the daemon (socket activated)
 "
     );
+    #[cfg(target_os = "macos")]
+    eprintln!("  tinydict hotkey                  listen for Ctrl+Cmd+X (launchd agent)");
 }
