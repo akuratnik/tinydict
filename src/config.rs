@@ -17,7 +17,7 @@ pub const AUDIO_CAP_BYTES: usize = 10_000_000;
 pub const AUDIO_CHUNK: usize = 4096;
 pub const SAMPLE_RATE: u32 = 16_000;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub speechmatics: Speechmatics,
@@ -141,18 +141,6 @@ impl Default for Daemon {
             history: true,
             notification_preview: true,
             wrap_tag: String::new(),
-        }
-    }
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            speechmatics: Speechmatics::default(),
-            vocab: Vocab::default(),
-            replacements: BTreeMap::new(),
-            cleanup: Cleanup::default(),
-            daemon: Daemon::default(),
         }
     }
 }

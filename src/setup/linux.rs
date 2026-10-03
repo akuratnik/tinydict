@@ -164,7 +164,7 @@ fn append_once(path: &std::path::Path, marker: &str, block: &str) -> Result<()> 
 
 fn bind_gnome(binding: &str, command: &str) -> Result<()> {
     gset_item("name", "tinydict")?;
-    gset_item("command", &command)?;
+    gset_item("command", command)?;
     gset_item("binding", binding)?;
 
     let current = gget(&[KEY_SCHEMA, "custom-keybindings"]);

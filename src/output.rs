@@ -188,11 +188,8 @@ fn append_history(raw: &str, clean: &str) -> Result<()> {
     });
     let mut lines: Vec<String> = if path.exists() {
         let f = fs::File::open(&path)?;
-        BufReader::new(f)
-            .lines()
-            .filter_map(|l| l.ok())
-            .filter(|l| !l.is_empty())
-            .collect()
+        let read: Vec<String> = BufReader::new(f).lines().collect::<std::io::Result<_>>()?;
+        read.into_iter().filter(|l| !l.is_empty()).collect()
     } else {
         Vec::new()
     };
