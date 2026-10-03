@@ -1,7 +1,6 @@
 use crate::{audio, cleanup, config, output, speechmatics, tray};
 use anyhow::{bail, Context, Result};
 use futures_util::FutureExt;
-use listenfd::ListenFd;
 use std::fs;
 use std::panic::AssertUnwindSafe;
 use std::time::Duration;
@@ -135,8 +134,7 @@ async fn shutdown_session(
 }
 
 async fn bind() -> Result<UnixListener> {
-    let mut fds = ListenFd::from_env();
-    if let Some(l) = fds.take_unix_listener(0).context("LISTEN_FDS")? {
+    if let Some(l) = activated_listener()? {
         l.set_nonblocking(true)?;
         return Ok(UnixListener::from_std(l)?);
     }
@@ -150,6 +148,55 @@ async fn bind() -> Result<UnixListener> {
         }
     }
     UnixListener::bind(&path).with_context(|| format!("binding {}", path.display()))
+}
+
+#[cfg(target_os = "linux")]
+fn activated_listener() -> Result<Option<std::os::unix::net::UnixListener>> {
+    listenfd::ListenFd::from_env()
+        .take_unix_listener(0)
+        .context("LISTEN_FDS")
+}
+
+/// Name of the `Sockets` entry in the launchd plist.
+#[cfg(target_os = "macos")]
+pub const LAUNCHD_SOCKET: &str = "Listener";
+
+#[cfg(target_os = "macos")]
+fn activated_listener() -> Result<Option<std::os::unix::net::UnixListener>> {
+    use std::os::fd::{FromRawFd, OwnedFd};
+
+    // <launch.h>, part of libSystem.
+    extern "C" {
+        fn launch_activate_socket(
+            name: *const libc::c_char,
+            fds: *mut *mut libc::c_int,
+            cnt: *mut libc::size_t,
+        ) -> libc::c_int;
+    }
+
+    let name = std::ffi::CString::new(LAUNCHD_SOCKET)?;
+    let mut fds = std::ptr::null_mut();
+    let mut cnt = 0;
+    let err = unsafe { launch_activate_socket(name.as_ptr(), &mut fds, &mut cnt) };
+    match err {
+        0 => {}
+        // Not started by launchd, or no such socket: bind it ourselves.
+        libc::ESRCH | libc::ENOENT => return Ok(None),
+        e => return Err(std::io::Error::from_raw_os_error(e)).context("launch_activate_socket"),
+    }
+    if fds.is_null() {
+        return Ok(None);
+    }
+    // We own every fd and the malloc'd array; extra fds close on drop.
+    let owned: Vec<OwnedFd> = unsafe {
+        let v = std::slice::from_raw_parts(fds, cnt)
+            .iter()
+            .map(|&fd| OwnedFd::from_raw_fd(fd))
+            .collect();
+        libc::free(fds.cast());
+        v
+    };
+    Ok(owned.into_iter().next().map(Into::into))
 }
 
 async fn handle_client(

@@ -1,7 +1,7 @@
+use super::run_cmd;
 use crate::config;
 use anyhow::{bail, Context, Result};
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::process::{Command, Stdio};
 
 const SOCKET_UNIT: &str = r#"[Unit]
@@ -28,30 +28,16 @@ UMask=0077
 
 const KEY_SCHEMA: &str = "org.gnome.settings-daemon.plugins.media-keys";
 const ITEM_SCHEMA: &str = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding";
-const ITEM_PATH: &str = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/tinydict/";
+const ITEM_PATH: &str =
+    "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/tinydict/";
 
-pub fn run(binding: Option<&str>) -> Result<()> {
-    check_deps()?;
-    install_self()?;
-    config::mkdir_0700(&config::config_dir())?;
-    config::mkdir_0700(&config::data_dir())?;
-
-    let cfg = config::config_path();
-    if cfg.exists() {
-        println!("config exists {}", cfg.display());
-    } else {
-        config::write_0600(&cfg, config::CONFIG_TEMPLATE)?;
-        println!("wrote {}", cfg.display());
-    }
-
+pub fn install(binding: Option<&str>) -> Result<()> {
     write_units()?;
     enable_socket()?;
-    bind_session_hotkey(binding)?;
-    println!("setup complete. fill in api_key fields in {}", cfg.display());
-    Ok(())
+    bind_session_hotkey(binding)
 }
 
-fn check_deps() -> Result<()> {
+pub fn check_deps() -> Result<()> {
     let required = ["pw-record", "notify-send", "systemd-run", "systemctl"];
     for bin in required {
         if !have(bin) {
@@ -83,22 +69,6 @@ fn sni_watcher() -> bool {
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
-}
-
-fn install_self() -> Result<()> {
-    let dest = config::bin_path();
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let src = std::env::current_exe().context("current_exe")?;
-    if src.canonicalize().ok() == dest.canonicalize().ok() {
-        return Ok(());
-    }
-    let _ = fs::remove_file(&dest);
-    fs::copy(&src, &dest).with_context(|| format!("copy to {}", dest.display()))?;
-    let _ = fs::set_permissions(&dest, fs::Permissions::from_mode(0o755));
-    println!("installed {}", dest.display());
-    Ok(())
 }
 
 fn write_units() -> Result<()> {
@@ -254,17 +224,6 @@ fn parse_gsettings_list(s: &str) -> Vec<String> {
         .filter(|p| !p.is_empty())
         .map(|p| p.to_string())
         .collect()
-}
-
-fn run_cmd(args: &[&str]) -> Result<()> {
-    let status = Command::new(args[0])
-        .args(&args[1..])
-        .status()
-        .with_context(|| format!("running {}", args[0]))?;
-    if !status.success() {
-        bail!("{} failed", args.join(" "));
-    }
-    Ok(())
 }
 
 #[cfg(test)]

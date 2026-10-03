@@ -5,7 +5,6 @@ use std::fs;
 use std::io::{BufRead, BufReader};
 use std::os::unix::fs::OpenOptionsExt;
 use std::process::Stdio;
-use std::time::Duration;
 use tokio::process::Command;
 
 pub async fn publish(cfg: &Config, raw: &str, text: &str, note: Option<&str>) -> Result<()> {
@@ -49,7 +48,10 @@ fn wrap_for_paste(cfg: &Config, text: &str) -> String {
     }
 }
 
+#[cfg(target_os = "linux")]
 async fn clipboard(text: &str) -> Result<()> {
+    use std::time::Duration;
+
     let path = config::clip_path();
 
     let _ = Command::new("systemctl")
@@ -94,6 +96,7 @@ async fn clipboard(text: &str) -> Result<()> {
     anyhow::bail!("wl-copy did not stay running (see: journalctl --user -u tinydict-clip)")
 }
 
+#[cfg(target_os = "linux")]
 async fn systemctl_ok<const N: usize>(args: [&str; N]) -> bool {
     Command::new("systemctl")
         .args(args)
@@ -103,6 +106,26 @@ async fn systemctl_ok<const N: usize>(args: [&str; N]) -> bool {
         .await
         .map(|s| s.success())
         .unwrap_or(false)
+}
+
+// The pasteboard server owns copied data, so pbcopy can exit right away.
+#[cfg(target_os = "macos")]
+async fn clipboard(text: &str) -> Result<()> {
+    use tokio::io::AsyncWriteExt;
+
+    let mut child = Command::new("pbcopy")
+        // launchd agents have no locale; without one pbcopy mangles non-ASCII.
+        .env("LANG", "en_US.UTF-8")
+        .stdin(Stdio::piped())
+        .spawn()
+        .context("spawning pbcopy")?;
+    let mut stdin = child.stdin.take().context("pbcopy stdin")?;
+    stdin.write_all(text.as_bytes()).await?;
+    drop(stdin);
+    if !child.wait().await?.success() {
+        anyhow::bail!("pbcopy failed");
+    }
+    Ok(())
 }
 
 fn notify(cfg: &Config, text: &str, note: Option<&str>) {
@@ -131,6 +154,7 @@ fn preview(text: &str) -> String {
     cap(text.trim(), 180)
 }
 
+#[cfg(target_os = "linux")]
 fn notify_send(summary: &str, body: &str) {
     let _ = std::process::Command::new("notify-send")
         .args(["--app-name=tinydict", "--", summary, body])
@@ -138,6 +162,20 @@ fn notify_send(summary: &str, body: &str) {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
+}
+
+// Text goes in as argv, never spliced into the script source. osascript takes
+// ~0.5 s to start, so don't block the daemon loop; tokio reaps the dropped child.
+#[cfg(target_os = "macos")]
+fn notify_send(summary: &str, body: &str) {
+    let _ = Command::new("osascript")
+        .args(["-e", "on run argv", "-e"])
+        .arg("display notification (item 2 of argv) with title (item 1 of argv)")
+        .args(["-e", "end run", summary, body])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
 }
 
 fn append_history(raw: &str, clean: &str) -> Result<()> {

@@ -8,6 +8,14 @@ use tokio::sync::Notify;
 
 use crate::config;
 
+/// Recorder that writes 16 kHz mono s16le PCM to stdout until SIGTERM.
+#[cfg(target_os = "linux")]
+#[rustfmt::skip]
+const RECORDER: &[&str] = &["pw-record", "--rate", "16000", "--channels", "1", "--format", "s16", "-"];
+#[cfg(target_os = "macos")]
+#[rustfmt::skip]
+const RECORDER: &[&str] = &["rec", "-q", "-t", "raw", "-r", "16000", "-c", "1", "-b", "16", "-e", "signed-integer", "-L", "-"];
+
 struct Inner {
     chunks: VecDeque<Vec<u8>>,
     bytes: usize,
@@ -90,15 +98,15 @@ pub struct Capture {
 
 impl Capture {
     pub async fn start() -> Result<Self> {
-        let mut child = Command::new("pw-record")
-            .args(["--rate", "16000", "--channels", "1", "--format", "s16", "-"])
+        let mut child = Command::new(RECORDER[0])
+            .args(&RECORDER[1..])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true)
             .spawn()
-            .context("spawning pw-record")?;
+            .with_context(|| format!("spawning {}", RECORDER[0]))?;
 
-        let mut stdout = child.stdout.take().context("pw-record stdout")?;
+        let mut stdout = child.stdout.take().context("recorder stdout")?;
         let q = Arc::new(AudioQ::new());
         let q2 = q.clone();
         let drain = tokio::spawn(async move {
@@ -108,7 +116,7 @@ impl Capture {
                     Ok(0) => break,
                     Ok(n) => q2.push(buf[..n].to_vec()),
                     Err(err) => {
-                        eprintln!("tinydict: pw-record read: {err}");
+                        eprintln!("tinydict: recorder read: {err}");
                         break;
                     }
                 }
@@ -138,7 +146,11 @@ impl Capture {
                 libc::kill(pid as libc::pid_t, libc::SIGTERM);
             }
         }
-        let _ = tokio::time::timeout(std::time::Duration::from_secs(2), self.child.wait()).await;
+        let wait = tokio::time::timeout(std::time::Duration::from_secs(2), self.child.wait());
+        if wait.await.is_err() {
+            // Wedged recorder (e.g. stalled device): stdout never hits EOF otherwise.
+            let _ = self.child.kill().await;
+        }
         if let Some(drain) = self.drain.take() {
             let _ = drain.await;
         }

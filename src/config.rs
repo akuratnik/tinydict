@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 pub const APP: &str = "tinydict";
+#[cfg(target_os = "linux")]
 pub const DEFAULT_BINDING: &str = "<Control><Super>x";
 pub const HISTORY_KEEP: usize = 500;
 pub const ARMING_TIMEOUT_SECS: u64 = 20;
@@ -275,30 +276,47 @@ pub fn open_settings() -> Result<()> {
     if !path.exists() {
         write_0600(&path, CONFIG_TEMPLATE)?;
     }
-    let status = Command::new("xdg-open")
+    let (opener, args) = OPENER;
+    let status = Command::new(opener)
+        .args(args)
         .arg(&path)
         .status()
-        .context("running xdg-open (install xdg-utils)")?;
+        .with_context(|| format!("running {opener}"))?;
     if !status.success() {
-        bail!("xdg-open failed for {}", path.display());
+        bail!("{opener} failed for {}", path.display());
     }
     Ok(())
 }
+
+#[cfg(target_os = "linux")]
+const OPENER: (&str, &[&str]) = ("xdg-open", &[]);
+// `open` alone has no .toml association; -t uses the default text editor.
+#[cfg(target_os = "macos")]
+const OPENER: (&str, &[&str]) = ("open", &["-t"]);
 
 pub fn data_dir() -> PathBuf {
     xdg("XDG_DATA_HOME", ".local/share").join(APP)
 }
 
+#[cfg(target_os = "linux")]
 pub fn runtime_dir() -> PathBuf {
     std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/tmp").join(format!("runtime-{}", users_uid())))
+        .unwrap_or_else(|| PathBuf::from("/tmp").join(format!("runtime-{}", uid())))
+}
+
+// macOS has no per-user runtime dir, and launchd needs a fixed socket path in
+// the plist, so the socket lives next to the history file.
+#[cfg(target_os = "macos")]
+pub fn runtime_dir() -> PathBuf {
+    data_dir()
 }
 
 pub fn socket_path() -> PathBuf {
     runtime_dir().join(format!("{APP}.sock"))
 }
 
+#[cfg(target_os = "linux")]
 pub fn clip_path() -> PathBuf {
     runtime_dir().join(format!("{APP}-clip.txt"))
 }
@@ -311,6 +329,7 @@ pub fn bin_path() -> PathBuf {
     home().join(".local/bin").join(APP)
 }
 
+#[cfg(target_os = "linux")]
 pub fn systemd_user_dir() -> PathBuf {
     config_dir()
         .parent()
@@ -324,7 +343,7 @@ fn xdg(var: &str, fallback: &str) -> PathBuf {
         .unwrap_or_else(|| home().join(fallback))
 }
 
-fn users_uid() -> u32 {
+pub fn uid() -> u32 {
     unsafe { libc::getuid() }
 }
 

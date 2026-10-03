@@ -1,6 +1,6 @@
 # tinydict
 
-Tiny, fast, accurate voice-to-text Linux daemon for GNOME/Hyprland (eg Ubuntu, Fedora, Debian, Arch, Omarchy, etc).
+Tiny, fast, accurate voice-to-text daemon for macOS and Linux GNOME/Hyprland (eg Ubuntu, Fedora, Debian, Arch, Omarchy, etc).
 
 - **No UI**: hotkey to start/stop, paste transcript from clipboard.
 - **Does NOT transcribe locally**: streaming cloud API (Speechmatics - has free credits).
@@ -12,11 +12,12 @@ Accurate, multi-language, supports custom vocab.
 
 ```sh
 cargo build --release
-install -m 755 target/release/tinydict ~/.local/bin/tinydict
-tinydict setup
+./target/release/tinydict setup   # installs itself to ~/.local/bin
 ```
 
-Needs PipeWire (`pw-record`), `wl-clipboard`, and a systemd user session.
+Linux needs PipeWire (`pw-record`), `wl-clipboard`, and a systemd user session.
+
+macOS needs `brew install sox`. Setup installs a socket-activated LaunchAgent. The first recording asks for microphone access; a rebuilt binary may need it re-granted in System Settings → Privacy & Security → Microphone. Notifications come from Script Editor, so allow it in System Settings → Notifications. Logs: `~/.local/share/tinydict/tinydict.log`.
 
 All settings & keys in `~/.config/tinydict/config.toml`. Reloaded for each recording. `tinydict settings` opens that file in the default editor.
 

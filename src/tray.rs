@@ -1,3 +1,4 @@
+#[cfg(target_os = "linux")]
 use ksni::{Icon, Tray, TrayMethods};
 
 #[derive(Clone, Copy)]
@@ -6,14 +7,38 @@ pub enum Color {
     Amber,
 }
 
+// macOS already shows its own mic-in-use dot in the menu bar, so there is no
+// tray there: `start` returns `None` and `Handle` cannot be constructed.
+#[cfg(target_os = "macos")]
+pub enum Handle {}
+
+#[cfg(target_os = "macos")]
+pub async fn start(_: Color) -> Option<Handle> {
+    None
+}
+
+#[cfg(target_os = "macos")]
+impl Handle {
+    pub async fn set(&self, _: Color) {
+        match *self {}
+    }
+
+    pub async fn shutdown(self) {
+        match self {}
+    }
+}
+
+#[cfg(target_os = "linux")]
 pub struct Handle {
     inner: ksni::Handle<Dot>,
 }
 
+#[cfg(target_os = "linux")]
 struct Dot {
     color: Color,
 }
 
+#[cfg(target_os = "linux")]
 impl Tray for Dot {
     fn id(&self) -> String {
         "tinydict".into()
@@ -30,6 +55,7 @@ impl Tray for Dot {
     }
 }
 
+#[cfg(target_os = "linux")]
 pub async fn start(color: Color) -> Option<Handle> {
     match (Dot { color }).spawn().await {
         Ok(inner) => Some(Handle { inner }),
@@ -40,6 +66,7 @@ pub async fn start(color: Color) -> Option<Handle> {
     }
 }
 
+#[cfg(target_os = "linux")]
 impl Handle {
     pub async fn set(&self, color: Color) {
         self.inner.update(|dot| dot.color = color).await;
@@ -50,6 +77,7 @@ impl Handle {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn dot_icon(color: Color) -> Icon {
     const SIZE: i32 = 22;
     let (r, g, b) = match color {

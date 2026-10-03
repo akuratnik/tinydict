@@ -55,7 +55,7 @@ tinydict — hotkey transcription
   tinydict toggle                  start/stop a recording
   tinydict cancel                  abort the current recording
   tinydict status                  print daemon state
-  tinydict daemon                  run the daemon (systemd socket activation)
+  tinydict daemon                  run the daemon (socket activated)
 "
     );
 }
