@@ -3,7 +3,7 @@ name = "tinydict"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/anton-expertstudio/tinydict"
+repository = "https://github.com/akuratnik/tinydict"
 description = "Tiny voice dictation Rust daemon for Linux and macOS."
 
 [dependencies]

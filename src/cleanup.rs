@@ -51,7 +51,7 @@ pub async fn run(cfg: &Config, transcript: &str) -> Result<String> {
         .bearer_auth(&key)
         .header(
             "HTTP-Referer",
-            "https://github.com/anton-expertstudio/tinydict",
+            "https://github.com/akuratnik/tinydict",
         )
         .header("X-Title", "tinydict")
         .json(&body)
