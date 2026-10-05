@@ -184,6 +184,11 @@ impl Session {
         self.text.lock().unwrap().clone()
     }
 
+    /// Grows only when Speechmatics recognizes words; silence adds nothing.
+    pub fn transcript_len(&self) -> usize {
+        self.text.lock().unwrap().len()
+    }
+
     fn fail_if_done(&mut self) -> Result<()> {
         match self.done.try_recv() {
             Ok(Err(e)) => bail!(e),

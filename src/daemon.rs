@@ -340,6 +340,8 @@ async fn session_inner(
     tray: Option<&tray::Handle>,
 ) -> Result<()> {
     let mut capture = audio::Capture::start().await?;
+    // Audio queued while connecting is still sent and billed, so the cap counts it.
+    let started = Instant::now();
     let connect = speechmatics::connect(&cfg.speechmatics, &cfg.vocab.words);
     tokio::pin!(connect);
 
@@ -364,6 +366,11 @@ async fn session_inner(
         let _ = phase.send(Phase::Recording);
     }
 
+    let mut last_speech = Instant::now();
+    let mut heard = 0;
+    let mut tick = tokio::time::interval(Duration::from_secs(1));
+    let mut auto_stop = None;
+
     loop {
         tokio::select! {
             cmd = cmds.recv() => match cmd {
@@ -373,11 +380,24 @@ async fn session_inner(
                 }
                 Some(SessionCmd::Stop) => {
                     capture.stop().await;
+                    stopped = true;
                 }
             },
             chunk = capture.recv() => match chunk {
                 Some(c) => stt.send_audio(c).await?,
                 None => break,
+            },
+            _ = tick.tick(), if !stopped => {
+                let len = stt.transcript_len();
+                if len > heard {
+                    heard = len;
+                    last_speech = Instant::now();
+                }
+                auto_stop = auto_stop_reason(&cfg.daemon, started, last_speech);
+                if auto_stop.is_some() {
+                    capture.stop().await;
+                    stopped = true;
+                }
             }
         }
     }
@@ -395,7 +415,7 @@ async fn session_inner(
     .await?;
     let raw = raw.trim().to_string();
     if raw.is_empty() {
-        output::notify_plain("no speech detected");
+        output::notify_plain(auto_stop.as_deref().unwrap_or("no speech detected"));
         return Ok(());
     }
 
@@ -412,9 +432,39 @@ async fn session_inner(
         (replaced, None)
     };
 
+    let note = match (auto_stop, note) {
+        (Some(a), Some(n)) => Some(format!("{a}; {n}")),
+        (a, n) => a.or(n),
+    };
+
     let _ = phase.send(Phase::Publishing);
     output::publish(cfg, &raw, &text, note.as_deref()).await?;
     Ok(())
+}
+
+fn auto_stop_reason(d: &config::Daemon, started: Instant, last_speech: Instant) -> Option<String> {
+    let past = |secs: u64, since: Instant| secs > 0 && since.elapsed() >= Duration::from_secs(secs);
+    if past(d.max_recording_secs, started) {
+        Some(format!(
+            "auto-stopped: {} limit reached",
+            mins(d.max_recording_secs)
+        ))
+    } else if past(d.silence_stop_secs, last_speech) {
+        Some(format!(
+            "auto-stopped: no speech recognized for {}",
+            mins(d.silence_stop_secs)
+        ))
+    } else {
+        None
+    }
+}
+
+fn mins(secs: u64) -> String {
+    if secs.is_multiple_of(60) {
+        format!("{} min", secs / 60)
+    } else {
+        format!("{secs}s")
+    }
 }
 
 fn fallback_cleanup(replaced: &str, e: anyhow::Error) -> (String, Option<String>) {

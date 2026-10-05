@@ -95,6 +95,10 @@ pub struct Cleanup {
 pub struct Daemon {
     #[serde(default = "default_idle")]
     pub idle_exit_secs: u64,
+    #[serde(default = "default_silence_stop")]
+    pub silence_stop_secs: u64,
+    #[serde(default = "default_max_recording")]
+    pub max_recording_secs: u64,
     #[serde(default = "default_true")]
     pub history: bool,
     #[serde(default = "default_true")]
@@ -138,6 +142,8 @@ impl Default for Daemon {
     fn default() -> Self {
         Self {
             idle_exit_secs: default_idle(),
+            silence_stop_secs: default_silence_stop(),
+            max_recording_secs: default_max_recording(),
             history: true,
             notification_preview: true,
             wrap_tag: String::new(),
@@ -179,6 +185,12 @@ Output only the cleaned transcript."
 }
 fn default_idle() -> u64 {
     90
+}
+fn default_silence_stop() -> u64 {
+    180
+}
+fn default_max_recording() -> u64 {
+    1800
 }
 
 impl VocabEntry {
@@ -393,6 +405,9 @@ You are cleaning up a speech-to-text transcript. Fix punctuation, capitalization
 
 [daemon]
 idle_exit_secs = 90
+# Auto-stop a forgotten recording, so it doesn't burn credits (0 = off).
+silence_stop_secs = 180
+max_recording_secs = 1800
 history = true
 notification_preview = true
 # wrap_tag = "voice_transcript"
@@ -436,6 +451,8 @@ mod tests {
         assert_eq!(cfg.cleanup.thinking, None);
         assert_eq!(cfg.cleanup.prompt.trim(), default_prompt());
         assert_eq!(cfg.daemon.idle_exit_secs, default_idle());
+        assert_eq!(cfg.daemon.silence_stop_secs, default_silence_stop());
+        assert_eq!(cfg.daemon.max_recording_secs, default_max_recording());
         assert!(cfg.daemon.wrap_tag.is_empty());
     }
 }
