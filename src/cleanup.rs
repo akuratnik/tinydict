@@ -1,6 +1,6 @@
 use crate::config::{self, Config};
 use anyhow::{bail, Context, Result};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::time::Duration;
 
 fn build_prompt(cfg: &Config) -> String {
@@ -23,23 +23,7 @@ pub async fn run(cfg: &Config, transcript: &str) -> Result<String> {
         "{}/chat/completions",
         cfg.cleanup.api_base.trim_end_matches('/')
     );
-    let body = ChatRequest {
-        model: cfg.cleanup.model.clone(),
-        temperature: 0.0,
-        messages: vec![
-            ChatMessage {
-                role: "system",
-                content: build_prompt(cfg),
-            },
-            ChatMessage {
-                role: "user",
-                content: transcript.to_string(),
-            },
-        ],
-        provider: provider_prefs(&cfg.cleanup),
-        reasoning: reasoning_prefs(&cfg.cleanup),
-        chat_template_kwargs: thinking_kwargs(&cfg.cleanup),
-    };
+    let body = request_body(cfg, transcript)?;
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(cfg.cleanup.timeout_secs.max(1)))
@@ -49,10 +33,7 @@ pub async fn run(cfg: &Config, transcript: &str) -> Result<String> {
     let resp = client
         .post(&url)
         .bearer_auth(&key)
-        .header(
-            "HTTP-Referer",
-            "https://github.com/akuratnik/tinydict",
-        )
+        .header("HTTP-Referer", "https://github.com/akuratnik/tinydict")
         .header("X-Title", "tinydict")
         .json(&body)
         .send()
@@ -76,69 +57,20 @@ pub async fn run(cfg: &Config, transcript: &str) -> Result<String> {
     validate(transcript, &cleaned).context("cleanup output rejected")
 }
 
-#[derive(Serialize)]
-struct ChatRequest {
-    model: String,
-    temperature: f32,
-    messages: Vec<ChatMessage>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    provider: Option<ProviderPrefs>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    reasoning: Option<ReasoningPrefs>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    chat_template_kwargs: Option<ChatTemplateKwargs>,
-}
-
-#[derive(Serialize)]
-struct ProviderPrefs {
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    only: Vec<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    quantizations: Vec<String>,
-    allow_fallbacks: bool,
-}
-
-fn provider_prefs(cfg: &config::Cleanup) -> Option<ProviderPrefs> {
-    if cfg.provider_only.is_empty() && cfg.quantizations.is_empty() {
-        return None;
+fn request_body(cfg: &Config, transcript: &str) -> Result<serde_json::Value> {
+    let mut body = serde_json::json!({
+        "model": cfg.cleanup.model,
+        "temperature": 0.0,
+        "messages": [
+            { "role": "system", "content": build_prompt(cfg) },
+            { "role": "user", "content": transcript },
+        ],
+    });
+    let extra = serde_json::to_value(&cfg.cleanup.extra_body).context("cleanup.extra_body")?;
+    if let (Some(body), serde_json::Value::Object(extra)) = (body.as_object_mut(), extra) {
+        body.extend(extra);
     }
-    Some(ProviderPrefs {
-        only: cfg.provider_only.clone(),
-        quantizations: cfg.quantizations.clone(),
-        allow_fallbacks: cfg.allow_fallbacks,
-    })
-}
-
-fn reasoning_prefs(cfg: &config::Cleanup) -> Option<ReasoningPrefs> {
-    match cfg.thinking {
-        Some(false) => Some(ReasoningPrefs { enabled: false }),
-        _ => None,
-    }
-}
-
-fn thinking_kwargs(cfg: &config::Cleanup) -> Option<ChatTemplateKwargs> {
-    match cfg.thinking {
-        Some(false) => Some(ChatTemplateKwargs {
-            enable_thinking: false,
-        }),
-        _ => None,
-    }
-}
-
-#[derive(Serialize)]
-struct ReasoningPrefs {
-    enabled: bool,
-}
-
-#[derive(Serialize)]
-struct ChatTemplateKwargs {
-    enable_thinking: bool,
-}
-
-#[derive(Serialize)]
-struct ChatMessage {
-    role: &'static str,
-    content: String,
+    Ok(body)
 }
 
 #[derive(Deserialize)]
@@ -207,5 +139,16 @@ mod tests {
         assert_eq!(out, "Hello world. This is a test transcript.");
         assert!(validate(raw, "").is_err());
         assert!(validate(raw, "x").is_err());
+    }
+
+    #[test]
+    fn extra_body_merges_and_overrides() {
+        let mut cfg = Config::default();
+        cfg.cleanup.extra_body =
+            toml::from_str("reasoning_effort = \"none\"\ntemperature = 0.7").unwrap();
+        let body = request_body(&cfg, "hi").unwrap();
+        assert_eq!(body["reasoning_effort"], "none");
+        assert_eq!(body["temperature"], 0.7);
+        assert_eq!(body["messages"][1]["content"], "hi");
     }
 }

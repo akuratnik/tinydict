@@ -21,6 +21,8 @@ macOS needs `brew install sox`. Setup installs two LaunchAgents: the socket-acti
 
 All settings & keys in `~/.config/tinydict/config.toml`. Reloaded for each recording. `tinydict settings` opens that file in the default editor.
 
+Cleanup works with any OpenAI-compatible API. Provider-specific options (e.g. disabling thinking) go in `[cleanup.extra_body]`; the config has OpenRouter and Cerebras examples.
+
 **Hotkey is Ctrl+Super+X** (Ctrl+Cmd+X on macOS). `tinydict setup` binds it on macOS, GNOME and Hyprland. Otherwise bind `tinydict toggle` yourself.
 
 Forgotten recordings auto-stop after 3 min without speech or 30 min total (`silence_stop_secs`, `max_recording_secs`).

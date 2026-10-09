@@ -18,6 +18,7 @@ pub const AUDIO_CHUNK: usize = 4096;
 pub const SAMPLE_RATE: u32 = 16_000;
 
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default)]
     pub speechmatics: Speechmatics,
@@ -32,6 +33,7 @@ pub struct Config {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Speechmatics {
     #[serde(default)]
     pub api_key: String,
@@ -48,6 +50,7 @@ pub struct Speechmatics {
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Vocab {
     #[serde(default)]
     pub words: Vec<VocabEntry>,
@@ -65,6 +68,7 @@ pub enum VocabEntry {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Cleanup {
     #[serde(default)]
     pub enabled: bool,
@@ -76,15 +80,9 @@ pub struct Cleanup {
     pub api_key: String,
     #[serde(default)]
     pub key_file: Option<PathBuf>,
+    /// Merged into the request JSON as-is, for provider-specific options.
     #[serde(default)]
-    pub provider_only: Vec<String>,
-    #[serde(default)]
-    pub quantizations: Vec<String>,
-    #[serde(default = "default_true")]
-    pub allow_fallbacks: bool,
-    /// `false` sends extras to disable model thinking. Omit for plain OpenAI-compatible APIs.
-    #[serde(default)]
-    pub thinking: Option<bool>,
+    pub extra_body: toml::Table,
     #[serde(default = "default_timeout")]
     pub timeout_secs: u64,
     #[serde(default = "default_prompt")]
@@ -92,6 +90,7 @@ pub struct Cleanup {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Daemon {
     #[serde(default = "default_idle")]
     pub idle_exit_secs: u64,
@@ -128,10 +127,7 @@ impl Default for Cleanup {
             api_base: default_api_base(),
             api_key: String::new(),
             key_file: None,
-            provider_only: Vec::new(),
-            quantizations: Vec::new(),
-            allow_fallbacks: true,
-            thinking: None,
+            extra_body: toml::Table::new(),
             timeout_secs: default_timeout(),
             prompt: default_prompt(),
         }
@@ -392,16 +388,25 @@ words = [ "Speechmatics", { content = "ksni", sounds_like = ["kay snee"] } ]
 enabled = false
 api_key = ""
 timeout_secs = 30
-# Recommended (OpenRouter):
+# Any OpenAI-compatible API. Uncomment one provider here and its extra_body below.
+# OpenRouter:
 # api_base = "https://openrouter.ai/api/v1"
 # model = "google/gemma-4-31b-it:nitro"
-# provider_only = ["cerebras"]
-# quantizations = ["fp16"]
-# allow_fallbacks = false
-# thinking = false
+# Cerebras:
+# api_base = "https://api.cerebras.ai/v1"
+# model = "qwen-3.8-27b"
 prompt = """
 You are cleaning up a speech-to-text transcript. Fix punctuation, capitalization, and obvious recognition errors. Do not add information that was not spoken. Do not wrap the result in quotes or code fences. Output only the cleaned transcript.
 """
+
+# Extra request fields, sent as-is. Field names come from your provider's API docs.
+# OpenRouter: no thinking, fast provider only.
+# [cleanup.extra_body]
+# reasoning = { enabled = false }
+# provider = { only = ["cerebras"], quantizations = ["fp16"], allow_fallbacks = false }
+# Cerebras: no thinking.
+# [cleanup.extra_body]
+# reasoning_effort = "none"
 
 [daemon]
 idle_exit_secs = 90
@@ -446,13 +451,16 @@ mod tests {
         assert!(!cfg.cleanup.enabled);
         assert_eq!(cfg.cleanup.model, "gpt-4o-mini");
         assert_eq!(cfg.cleanup.api_base, "https://api.openai.com/v1");
-        assert!(cfg.cleanup.provider_only.is_empty());
-        assert!(cfg.cleanup.quantizations.is_empty());
-        assert_eq!(cfg.cleanup.thinking, None);
+        assert!(cfg.cleanup.extra_body.is_empty());
         assert_eq!(cfg.cleanup.prompt.trim(), default_prompt());
         assert_eq!(cfg.daemon.idle_exit_secs, default_idle());
         assert_eq!(cfg.daemon.silence_stop_secs, default_silence_stop());
         assert_eq!(cfg.daemon.max_recording_secs, default_max_recording());
         assert!(cfg.daemon.wrap_tag.is_empty());
+    }
+
+    #[test]
+    fn unknown_keys_rejected() {
+        assert!(toml::from_str::<Config>("[cleanup]\nthinking = false\n").is_err());
     }
 }
